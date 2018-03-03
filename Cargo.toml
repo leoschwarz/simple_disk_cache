@@ -2,6 +2,9 @@
 name = "simple_disk_cache"
 version = "0.1.0"
 authors = ["Leo Schwarz <mail@leoschwarz.com>"]
+license = "Apache-2.0"
+description = "Simple disk cache for use in Rust applications."
+repository = "https://github.com/leoschwarz/simple_disk_cache"
 
 [dependencies]
 addressable_queue = "0.2"
