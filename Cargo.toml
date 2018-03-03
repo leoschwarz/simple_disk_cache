@@ -1,0 +1,11 @@
+[package]
+name = "simple_disk_cache"
+version = "0.1.0"
+authors = ["Leo Schwarz <mail@leoschwarz.com>"]
+
+[dependencies]
+addressable_queue = "0.2"
+failure = "0.1"
+serde = "1.0"
+serde_derive = "1.0"
+serde_json = "1.0"
