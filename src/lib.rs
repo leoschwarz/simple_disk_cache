@@ -1,4 +1,5 @@
 extern crate addressable_queue;
+extern crate bincode;
 #[macro_use]
 extern crate failure;
 extern crate serde;
@@ -56,8 +57,8 @@ where
 
         let data_file = data_dir.join("cache_data.json");
         let data = if data_file.exists() {
-            let file = File::open(data_file).map_err(|e| CacheError::ReadDataFile(e))?;
-            serde_json::from_reader(file).map_err(|e| CacheError::ParseDataFile(e))?
+            let file = File::open(data_file).map_err(|e| CacheError::ReadMetadata(e))?;
+            serde_json::from_reader(file).map_err(|e| CacheError::DeserializeMetada(e))?
         } else {
             Metadata {
                 current_size: 0,
@@ -83,7 +84,10 @@ where
             // Read the value from the disk.
             let file_name = self.data_file_path(item.id);
             let file = File::open(file_name).map_err(|e| CacheError::ReadCacheFile(e))?;
-            let value = serde_json::from_reader(file).map_err(|e| CacheError::ParseCacheFile(e))?;
+            let value = self.config
+                .encoding
+                .deserialize(file)
+                .map_err(|e| CacheError::DeserializeValue(e))?;
 
             // Insert the item again at the end of the queue.
             self.data.entries.insert(key.clone(), item);
@@ -97,16 +101,16 @@ where
 
     /// Insert a value into the cache.
     pub fn put(&mut self, key: &K, value: &V) -> Result<(), CacheError> {
-        let data = serde_json::to_vec(value).map_err(|e| CacheError::EncodeCacheFile(e))?;
-        let bytes = data.len() as u64;
-
         let entry_id = self.data.counter;
         self.data.counter += 1;
 
         // Write the file.
         let mut file =
             File::create(self.data_file_path(entry_id)).map_err(|e| CacheError::CreateFile(e))?;
-        file.write(&data[..]).map_err(|e| CacheError::WriteFile(e))?;
+        let bytes = self.config
+            .encoding
+            .serialize(&mut file, value)
+            .map_err(|e| CacheError::SerializeValue(e))? as u64;
 
         // Put the entry into the data struct.
         self.data.entries.insert(
@@ -131,13 +135,17 @@ where
         let data_file = self.data_dir.join("cache_data.json");
         let mut file = File::create(data_file).map_err(|e| CacheError::CreateFile(e))?;
 
-        let data = serde_json::to_vec(&self.data).map_err(|e| CacheError::EncodeDataFile(e))?;
+        let data = serde_json::to_vec(&self.data).map_err(|e| CacheError::SerializeMetadata(e))?;
         file.write(&data).map_err(|e| CacheError::WriteFile(e))?;
         Ok(())
     }
 
     fn data_file_path(&self, entry_id: u64) -> PathBuf {
-        self.data_dir.join(format!("data_{}.json", entry_id))
+        self.data_dir.join(format!(
+            "data_{}.{}",
+            entry_id,
+            self.config.encoding.extension()
+        ))
     }
 
     /// Deletes as many cache entries as needed until the maximum storage is
@@ -157,22 +165,22 @@ where
 #[derive(Debug, Fail)]
 pub enum CacheError {
     #[fail(display = "Reading metadata file failed: {:?}", _0)]
-    ReadDataFile(io::Error),
+    ReadMetadata(io::Error),
 
-    #[fail(display = "Parsing metadata file failed: {:?}", _0)]
-    ParseDataFile(serde_json::Error),
+    #[fail(display = "Deserializing cache metadata failed: {:?}", _0)]
+    DeserializeMetada(serde_json::Error),
 
-    #[fail(display = "Encoding metadata file failed: {:?}", _0)]
-    EncodeDataFile(serde_json::Error),
+    #[fail(display = "Serializing cache metadata failed: {:?}", _0)]
+    SerializeMetadata(serde_json::Error),
 
     #[fail(display = "Reading cache data file failed: {:?}", _0)]
     ReadCacheFile(io::Error),
 
-    #[fail(display = "Parsing cache data file failed: {:?}", _0)]
-    ParseCacheFile(serde_json::Error),
+    #[fail(display = "Deserializing cache value failed: {:?}", _0)]
+    DeserializeValue(config::DeserializeError),
 
-    #[fail(display = "Encoding cache data file failed: {:?}", _0)]
-    EncodeCacheFile(serde_json::Error),
+    #[fail(display = "Serializing cache value failed: {:?}", _0)]
+    SerializeValue(config::SerializeError),
 
     #[fail(display = "Creating directory failed: {:?}", _0)]
     CreateDir(io::Error),
