@@ -12,6 +12,9 @@ pub struct CacheConfig {
 
     /// Encoding format of the data files.
     pub encoding: DataEncoding,
+
+    /// Strategy of the cache used.
+    pub strategy: CacheStrategy,
 }
 
 #[derive(Clone, Debug)]
@@ -86,4 +89,20 @@ pub enum DeserializeError {
 
     #[fail(display = "Failed deserializing json: {:?}", _0)]
     Json(serde_json::Error),
+}
+
+#[derive(Clone, Debug)]
+pub enum CacheStrategy {
+    /// Least recently used.
+    ///
+    /// Delete the value that was least recently used when needed.
+    /// This is a good trade off keeping active values around and
+    /// deleting old ones to make room for new ones.
+    LRU,
+}
+
+impl Default for CacheStrategy {
+    fn default() -> Self {
+        CacheStrategy::LRU
+    }
 }
