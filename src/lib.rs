@@ -50,7 +50,11 @@ where
     K: DeserializeOwned + Serialize + Clone + Eq + Hash,
     V: DeserializeOwned + Serialize,
 {
-    pub fn initialize(data_dir: PathBuf, config: CacheConfig) -> Result<Self, CacheError> {
+    pub fn initialize<P: Into<PathBuf>>(
+        data_dir: P,
+        config: CacheConfig,
+    ) -> Result<Self, CacheError> {
+        let data_dir = data_dir.into();
         if !data_dir.exists() {
             fs::create_dir_all(&data_dir).map_err(|e| CacheError::CreateDir(e))?;
         }
@@ -147,17 +151,17 @@ where
         let subdir_2 = (entry_id / s) % s;
 
         // Assert the directory exists.
-        fs::create_dir_all(format!("{}/{}", subdir_1, subdir_2))
-            .map_err(|e| CacheError::CreateDir(e))?;
+        let dir = self.data_dir.join(format!("{}/{}", subdir_1, subdir_2));
+        fs::create_dir_all(&dir).map_err(|e| CacheError::CreateDir(e))?;
 
         // Determine file path.
-        Ok(self.data_dir.join(format!(
-            "{}/{}/data_{}.{}",
-            subdir_1,
-            subdir_2,
+        let path = Ok(self.data_dir.join(dir.join(format!(
+            "data_{}.{}",
             entry_id,
             self.config.encoding.extension()
-        )))
+        ))));
+        println!("path: {:?}", path);
+        path
     }
 
     /// Deletes as many cache entries as needed until the maximum storage is
