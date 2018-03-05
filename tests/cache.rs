@@ -40,3 +40,36 @@ fn basic_usage() {
         assert_eq!(v, Some(v_expected));
     }
 }
+
+/// Tests writing the cache and then restoring it again.
+#[test]
+fn restore_cache() {
+    let tempdir = get_tempdir("restore_cache");
+    let config1 = CacheConfig {
+        // This should never be reached in this test.
+        max_bytes: 10 * 1024 * 1024,
+        encoding: DataEncoding::Json,
+        strategy: CacheStrategy::LRU,
+        subdirs_per_level: 3,
+    };
+    let config2 = config1.clone();
+    let mut cache =
+        TestCache::initialize(tempdir.as_ref(), config1).expect("failed initializing cache.");
+
+    // Insert {5->10, 6->12, …, 20->40}.
+    for k in 5..41 {
+        let v = (k * 2) as u64;
+        cache.put(&k, &v).expect("failed writing to cache.");
+    }
+
+    drop(cache);
+    let mut cache =
+        TestCache::initialize(tempdir.as_ref(), config2).expect("failed initializing cache.");
+
+    // Retrieve and check the values.
+    for k in 5..41 {
+        let v_expected = (k * 2) as u64;
+        let v = cache.get(&k).expect("failed reading from cache.");
+        assert_eq!(v, Some(v_expected));
+    }
+}
