@@ -82,7 +82,7 @@ where
     pub fn get(&mut self, key: &K) -> Result<Option<V>, CacheError> {
         if let Some(item) = self.data.entries.remove_key(key) {
             // Read the value from the disk.
-            let file_name = self.data_file_path(item.id);
+            let file_name = self.data_file_path(item.id)?;
             let file = File::open(file_name).map_err(|e| CacheError::ReadCacheFile(e))?;
             let value = self.config
                 .encoding
@@ -106,7 +106,7 @@ where
 
         // Write the file.
         let mut file =
-            File::create(self.data_file_path(entry_id)).map_err(|e| CacheError::CreateFile(e))?;
+            File::create(self.data_file_path(entry_id)?).map_err(|e| CacheError::CreateFile(e))?;
         let bytes = self.config
             .encoding
             .serialize(&mut file, value)
@@ -140,12 +140,24 @@ where
         Ok(())
     }
 
-    fn data_file_path(&self, entry_id: u64) -> PathBuf {
-        self.data_dir.join(format!(
-            "data_{}.{}",
+    fn data_file_path(&self, entry_id: u64) -> Result<PathBuf, CacheError> {
+        // Determine file subdirectory.
+        let s = self.config.subdirs_per_level as u64;
+        let subdir_1 = entry_id % s;
+        let subdir_2 = (entry_id / s) % s;
+
+        // Assert the directory exists.
+        fs::create_dir_all(format!("{}/{}", subdir_1, subdir_2))
+            .map_err(|e| CacheError::CreateDir(e))?;
+
+        // Determine file path.
+        Ok(self.data_dir.join(format!(
+            "{}/{}/data_{}.{}",
+            subdir_1,
+            subdir_2,
             entry_id,
             self.config.encoding.extension()
-        ))
+        )))
     }
 
     /// Deletes as many cache entries as needed until the maximum storage is
@@ -154,7 +166,7 @@ where
         while self.data.current_size > self.config.max_bytes {
             let (_, entry) = self.data.entries.remove_head().unwrap();
             self.data.current_size -= entry.size;
-            let path = self.data_file_path(entry.id);
+            let path = self.data_file_path(entry.id)?;
             fs::remove_file(path).map_err(|e| CacheError::RemoveFile(e))?;
         }
         Ok(())

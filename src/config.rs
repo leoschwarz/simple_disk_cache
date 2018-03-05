@@ -15,6 +15,9 @@ pub struct CacheConfig {
 
     /// Strategy of the cache used.
     pub strategy: CacheStrategy,
+
+    /// Number of subdirectories per level. (There are two levels.)
+    pub subdirs_per_level: u32,
 }
 
 #[derive(Clone, Debug)]
