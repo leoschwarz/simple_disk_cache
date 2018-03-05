@@ -160,7 +160,6 @@ where
             entry_id,
             self.config.encoding.extension()
         ))));
-        println!("path: {:?}", path);
         path
     }
 
