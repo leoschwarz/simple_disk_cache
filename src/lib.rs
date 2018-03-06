@@ -104,9 +104,19 @@ where
     }
 
     /// Insert a value into the cache.
+    ///
+    /// If the key already exists, the previous value will be overwritten.
     pub fn put(&mut self, key: &K, value: &V) -> Result<(), CacheError> {
-        let entry_id = self.data.counter;
-        self.data.counter += 1;
+        let entry_id = if let Some(entry) = self.data.entries.remove_key(key) {
+            // Reuse the same file.
+            // Note that later it will be added again to data.entries.
+            entry.id
+        } else {
+            // Create a new entry.
+            let entry_id = self.data.counter;
+            self.data.counter += 1;
+            entry_id
+        };
 
         // Write the file.
         let file_path = self.data_file_path(entry_id)?;
