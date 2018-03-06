@@ -86,8 +86,8 @@ where
     pub fn get(&mut self, key: &K) -> Result<Option<V>, CacheError> {
         if let Some(item) = self.data.entries.remove_key(key) {
             // Read the value from the disk.
-            let file_name = self.data_file_path(item.id)?;
-            let file = File::open(file_name).map_err(|e| CacheError::ReadCacheFile(e))?;
+            let file_path = self.data_file_path(item.id)?;
+            let file = File::open(file_path).map_err(|e| CacheError::ReadCacheFile(e))?;
             let value = self.config
                 .encoding
                 .deserialize(file)
@@ -157,11 +157,11 @@ where
         fs::create_dir_all(&dir).map_err(|e| CacheError::CreateDir(e))?;
 
         // Determine file path.
-        let path = Ok(self.data_dir.join(dir.join(format!(
+        let path = Ok(dir.join(format!(
             "data_{}.{}",
             entry_id,
             self.config.encoding.extension()
-        ))));
+        )));
         path
     }
 
