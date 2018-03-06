@@ -5,6 +5,7 @@ authors = ["Leo Schwarz <mail@leoschwarz.com>"]
 license = "Apache-2.0"
 description = "Simple disk cache for use in Rust applications."
 repository = "https://github.com/leoschwarz/simple_disk_cache"
+documentation = "https://docs.rs/simple_disk_cache"
 
 [dependencies]
 addressable_queue = "0.2"
