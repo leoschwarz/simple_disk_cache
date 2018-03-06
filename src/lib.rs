@@ -109,8 +109,8 @@ where
         self.data.counter += 1;
 
         // Write the file.
-        let mut file =
-            File::create(self.data_file_path(entry_id)?).map_err(|e| CacheError::CreateFile(e))?;
+        let file_path = self.data_file_path(entry_id)?;
+        let mut file = File::create(&file_path).map_err(|e| CacheError::CreateFile(e, file_path))?;
         let bytes = self.config
             .encoding
             .serialize(&mut file, value)
@@ -137,10 +137,12 @@ where
 
     fn write_metadata(&self) -> Result<(), CacheError> {
         let data_file = self.data_dir.join("cache_data.json");
-        let mut file = File::create(data_file).map_err(|e| CacheError::CreateFile(e))?;
+        let mut file =
+            File::create(&data_file).map_err(|e| CacheError::CreateFile(e, data_file.clone()))?;
 
         let data = serde_json::to_vec(&self.data).map_err(|e| CacheError::SerializeMetadata(e))?;
-        file.write(&data).map_err(|e| CacheError::WriteFile(e))?;
+        file.write(&data)
+            .map_err(|e| CacheError::WriteFile(e, data_file))?;
         Ok(())
     }
 
@@ -170,7 +172,7 @@ where
             let (_, entry) = self.data.entries.remove_head().unwrap();
             self.data.current_size -= entry.size;
             let path = self.data_file_path(entry.id)?;
-            fs::remove_file(path).map_err(|e| CacheError::RemoveFile(e))?;
+            fs::remove_file(&path).map_err(|e| CacheError::RemoveFile(e, path))?;
         }
         Ok(())
     }
@@ -200,12 +202,12 @@ pub enum CacheError {
     #[fail(display = "Creating directory failed: {:?}", _0)]
     CreateDir(io::Error),
 
-    #[fail(display = "Creating file failed: {:?}", _0)]
-    CreateFile(io::Error),
+    #[fail(display = "Creating file failed: {:?}, filename = '{:?}'", _0, _1)]
+    CreateFile(io::Error, PathBuf),
 
-    #[fail(display = "Writing file failed: {:?}", _0)]
-    WriteFile(io::Error),
+    #[fail(display = "Writing file failed: {:?}, filename = '{:?}'", _0, _1)]
+    WriteFile(io::Error, PathBuf),
 
-    #[fail(display = "Deleting file failed: {:?}", _0)]
-    RemoveFile(io::Error),
+    #[fail(display = "Deleting file failed: {:?}, filename = '{:?}'", _0, _1)]
+    RemoveFile(io::Error, PathBuf),
 }
