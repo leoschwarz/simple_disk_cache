@@ -34,6 +34,10 @@ impl DataEncoding {
         }
     }
 
+    pub(crate) fn filename(&self, basename: &str) -> String {
+        format!("{}.{}", basename, self.extension())
+    }
+
     pub(crate) fn serialize<T: Serialize, W: Write>(
         &self,
         writer: &mut W,

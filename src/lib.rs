@@ -40,7 +40,8 @@ where
     K: Clone + Eq + Hash + Serialize + DeserializeOwned,
 {
     config: CacheConfig,
-    data: Metadata<K>,
+    metadata: Metadata<K>,
+    metadata_file: PathBuf,
     data_dir: PathBuf,
     _phantom: PhantomData<V>,
 }
@@ -59,10 +60,13 @@ where
             fs::create_dir_all(&data_dir).map_err(|e| CacheError::CreateDir(e))?;
         }
 
-        let data_file = data_dir.join("cache_data.json");
-        let data = if data_file.exists() {
-            let file = File::open(data_file).map_err(|e| CacheError::ReadMetadata(e))?;
-            serde_json::from_reader(file).map_err(|e| CacheError::DeserializeMetada(e))?
+        let metadata_file = data_dir.join(config.encoding.filename("cache_data"));
+        let metadata = if metadata_file.exists() {
+            let file = File::open(&metadata_file).map_err(|e| CacheError::ReadMetadata(e))?;
+            config
+                .encoding
+                .deserialize(file)
+                .map_err(|e| CacheError::DeserializeMetadata(e))?
         } else {
             Metadata {
                 current_size: 0,
@@ -73,7 +77,8 @@ where
 
         Ok(SimpleCache {
             config,
-            data,
+            metadata,
+            metadata_file,
             data_dir,
             _phantom: PhantomData,
         })
@@ -84,7 +89,7 @@ where
     /// Unless there is an error, this will either return `Ok(Some(value))` if a value was found,
     /// or `Ok(None)` if no value for the key exists in the cache.
     pub fn get(&mut self, key: &K) -> Result<Option<V>, CacheError> {
-        if let Some(item) = self.data.entries.remove_key(key) {
+        if let Some(item) = self.metadata.entries.remove_key(key) {
             // Read the value from the disk.
             let file_path = self.data_file_path(item.id)?;
             let file = File::open(file_path).map_err(|e| CacheError::ReadCacheFile(e))?;
@@ -94,7 +99,7 @@ where
                 .map_err(|e| CacheError::DeserializeValue(e))?;
 
             // Insert the item again at the end of the queue.
-            self.data.entries.insert(key.clone(), item);
+            self.metadata.entries.insert(key.clone(), item);
             self.write_metadata()?;
             Ok(Some(value))
         } else {
@@ -107,14 +112,14 @@ where
     ///
     /// If the key already exists, the previous value will be overwritten.
     pub fn put(&mut self, key: &K, value: &V) -> Result<(), CacheError> {
-        let entry_id = if let Some(entry) = self.data.entries.remove_key(key) {
+        let entry_id = if let Some(entry) = self.metadata.entries.remove_key(key) {
             // Reuse the same file.
             // Note that later it will be added again to data.entries.
             entry.id
         } else {
             // Create a new entry.
-            let entry_id = self.data.counter;
-            self.data.counter += 1;
+            let entry_id = self.metadata.counter;
+            self.metadata.counter += 1;
             entry_id
         };
 
@@ -127,14 +132,14 @@ where
             .map_err(|e| CacheError::SerializeValue(e))? as u64;
 
         // Put the entry into the data struct.
-        self.data.entries.insert(
+        self.metadata.entries.insert(
             key.clone(),
             CacheEntry {
                 size: bytes,
                 id: entry_id,
             },
         );
-        self.data.current_size += bytes;
+        self.metadata.current_size += bytes;
 
         // Cleanup entries if needed.
         self.cleanup()?;
@@ -146,13 +151,13 @@ where
     }
 
     fn write_metadata(&self) -> Result<(), CacheError> {
-        let data_file = self.data_dir.join("cache_data.json");
-        let mut file =
-            File::create(&data_file).map_err(|e| CacheError::CreateFile(e, data_file.clone()))?;
+        let mut file = File::create(&self.metadata_file)
+            .map_err(|e| CacheError::CreateFile(e, self.metadata_file.clone()))?;
 
-        let data = serde_json::to_vec(&self.data).map_err(|e| CacheError::SerializeMetadata(e))?;
+        let data =
+            serde_json::to_vec(&self.metadata).map_err(|e| CacheError::SerializeMetadata(e))?;
         file.write(&data)
-            .map_err(|e| CacheError::WriteFile(e, data_file))?;
+            .map_err(|e| CacheError::WriteFile(e, self.metadata_file.clone()))?;
         Ok(())
     }
 
@@ -178,9 +183,9 @@ where
     /// Deletes as many cache entries as needed until the maximum storage is
     /// free again.
     fn cleanup(&mut self) -> Result<(), CacheError> {
-        while self.data.current_size > self.config.max_bytes {
-            let (_, entry) = self.data.entries.remove_head().unwrap();
-            self.data.current_size -= entry.size;
+        while self.metadata.current_size > self.config.max_bytes {
+            let (_, entry) = self.metadata.entries.remove_head().unwrap();
+            self.metadata.current_size -= entry.size;
             let path = self.data_file_path(entry.id)?;
             fs::remove_file(&path).map_err(|e| CacheError::RemoveFile(e, path))?;
         }
@@ -195,7 +200,7 @@ pub enum CacheError {
     ReadMetadata(io::Error),
 
     #[fail(display = "Deserializing cache metadata failed: {:?}", _0)]
-    DeserializeMetada(serde_json::Error),
+    DeserializeMetadata(config::DeserializeError),
 
     #[fail(display = "Serializing cache metadata failed: {:?}", _0)]
     SerializeMetadata(serde_json::Error),
