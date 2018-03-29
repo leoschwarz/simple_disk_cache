@@ -12,7 +12,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::fs::{self, File};
 use std::hash::Hash;
-use std::io::{self, Write};
+use std::io;
 use std::marker::PhantomData;
 use std::path::PathBuf;
 
@@ -154,10 +154,10 @@ where
         let mut file = File::create(&self.metadata_file)
             .map_err(|e| CacheError::CreateFile(e, self.metadata_file.clone()))?;
 
-        let data =
-            serde_json::to_vec(&self.metadata).map_err(|e| CacheError::SerializeMetadata(e))?;
-        file.write(&data)
-            .map_err(|e| CacheError::WriteFile(e, self.metadata_file.clone()))?;
+        self.config
+            .encoding
+            .serialize(&mut file, &self.metadata)
+            .map_err(|e| CacheError::SerializeMetadata(e))?;
         Ok(())
     }
 
@@ -203,7 +203,7 @@ pub enum CacheError {
     DeserializeMetadata(config::DeserializeError),
 
     #[fail(display = "Serializing cache metadata failed: {:?}", _0)]
-    SerializeMetadata(serde_json::Error),
+    SerializeMetadata(config::SerializeError),
 
     #[fail(display = "Reading cache data file failed: {:?}", _0)]
     ReadCacheFile(io::Error),

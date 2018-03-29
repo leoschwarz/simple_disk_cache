@@ -14,13 +14,12 @@ fn get_tempdir(prefix: &'static str) -> TempDir {
     TempDir::new(format!("sdc_test_{}", prefix).as_str()).expect("failed setting up temp directory")
 }
 
-#[test]
-fn basic_usage() {
+fn basic_usage(encoding: DataEncoding) {
     let tempdir = get_tempdir("basic_usage");
     let config = CacheConfig {
         // This should never be reached in this test.
         max_bytes: 10 * 1024 * 1024,
-        encoding: DataEncoding::Json,
+        encoding,
         strategy: CacheStrategy::LRU,
         subdirs_per_level: 3,
     };
@@ -41,14 +40,23 @@ fn basic_usage() {
     }
 }
 
-/// Tests writing the cache and then restoring it again.
 #[test]
-fn restore_cache() {
+fn basic_usage_json() {
+    basic_usage(DataEncoding::Json)
+}
+
+#[test]
+fn basic_usage_bincode() {
+    basic_usage(DataEncoding::Bincode)
+}
+
+/// Tests writing the cache and then restoring it again.
+fn restore_cache(encoding: DataEncoding) {
     let tempdir = get_tempdir("restore_cache");
     let config1 = CacheConfig {
         // This should never be reached in this test.
         max_bytes: 10 * 1024 * 1024,
-        encoding: DataEncoding::Json,
+        encoding,
         strategy: CacheStrategy::LRU,
         subdirs_per_level: 3,
     };
@@ -72,4 +80,14 @@ fn restore_cache() {
         let v = cache.get(&k).expect("failed reading from cache.");
         assert_eq!(v, Some(v_expected));
     }
+}
+
+#[test]
+fn restore_cache_json() {
+    restore_cache(DataEncoding::Json)
+}
+
+#[test]
+fn restore_cache_bincode() {
+    restore_cache(DataEncoding::Bincode)
 }
