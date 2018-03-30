@@ -18,6 +18,7 @@ use std::path::PathBuf;
 
 pub mod config;
 use self::config::CacheConfig;
+pub mod encoding;
 
 #[derive(Serialize, Deserialize)]
 struct Metadata<K>
@@ -200,19 +201,19 @@ pub enum CacheError {
     ReadMetadata(io::Error),
 
     #[fail(display = "Deserializing cache metadata failed: {:?}", _0)]
-    DeserializeMetadata(config::DeserializeError),
+    DeserializeMetadata(encoding::DeserializeError),
 
     #[fail(display = "Serializing cache metadata failed: {:?}", _0)]
-    SerializeMetadata(config::SerializeError),
+    SerializeMetadata(encoding::SerializeError),
 
     #[fail(display = "Reading cache data file failed: {:?}", _0)]
     ReadCacheFile(io::Error),
 
     #[fail(display = "Deserializing cache value failed: {:?}", _0)]
-    DeserializeValue(config::DeserializeError),
+    DeserializeValue(encoding::DeserializeError),
 
     #[fail(display = "Serializing cache value failed: {:?}", _0)]
-    SerializeValue(config::SerializeError),
+    SerializeValue(encoding::SerializeError),
 
     #[fail(display = "Creating directory failed: {:?}", _0)]
     CreateDir(io::Error),
